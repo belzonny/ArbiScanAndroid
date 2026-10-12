@@ -18,13 +18,66 @@ jobs:
       - uses: android-actions/setup-android@v4
 
       - name: Extract project ZIP
-        run: |
-          unzip ArbiScanAndroid_Project.zip
-          cd ArbiScanAndroid
+        run: unzip ArbiScanAndroid_Project.zip
 
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
+
+      - name: Fix Java and Kotlin targets
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path("ArbiScanAndroid/app/build.gradle.kts")
+          s = p.read_text()
+
+          if "compileOptions" not in s:
+              s = s.replace(
+                  "android {",
+                  """android {
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }""",
+                  1
+              )
+          else:
+              s = re.sub(
+                  r'compileOptions\s*\{.*?\}',
+                  """compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }""",
+                  s,
+                  count=1,
+                  flags=re.S
+              )
+
+          if "kotlinOptions" not in s:
+              s = s.replace(
+                  "android {",
+                  """android {
+              kotlinOptions {
+                  jvmTarget = "17"
+              }""",
+                  1
+              )
+          else:
+              s = re.sub(
+                  r'kotlinOptions\s*\{.*?\}',
+                  """kotlinOptions {
+                  jvmTarget = "17"
+              }""",
+                  s,
+                  count=1,
+                  flags=re.S
+              )
+
+          p.write_text(s)
+          print("Java and Kotlin targets updated")
+          PY
 
       - name: Build APK
         run: |
@@ -32,6 +85,7 @@ jobs:
           gradle assembleDebug
 
       - uses: actions/upload-artifact@v4
+        if: success()
         with:
           name: ArbiScan-debug-apk
           path: ArbiScanAndroid/app/build/outputs/apk/debug/app-debug.apk
